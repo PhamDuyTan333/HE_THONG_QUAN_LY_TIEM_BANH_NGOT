@@ -2,7 +2,11 @@
   "rewrites": [
     {
       "source": "/(.*)",
+<<<<<<< HEAD
       "destination": "/api"
+=======
+      "destination": "/server.js"
+>>>>>>> 141821be0ca426ca38691337a602ec7a2c890f84
     }
   ]
 }
