@@ -93,23 +93,17 @@ app.get('/api/test-db', async (req, res) => {
 
 // Import and use existing routes
 try {
-  const authRoutes = require('./routes/auth');
-  const productRoutes = require('./routes/products');
-  const categoryRoutes = require('./routes/categories');
-  const orderRoutes = require('./routes/orders');
-  const customerRoutes = require('./routes/customers');
-  const couponRoutes = require('./routes/coupons');
-  const settingsRoutes = require('./routes/settings');
-  const messageRoutes = require('./routes/messages');
+  const authRoutes = require('./routes/authRoutes');
+  const productRoutes = require('./routes/productRoutes');
+  const categoryRoutes = require('./routes/categoryRoutes');
+  const orderRoutes = require('./routes/orderRoutes');
+  const accountRoutes = require('./routes/accountRoutes');
 
   app.use('/api/auth', authRoutes);
   app.use('/api/products', productRoutes);
   app.use('/api/categories', categoryRoutes);
   app.use('/api/orders', orderRoutes);
-  app.use('/api/customers', customerRoutes);
-  app.use('/api/coupons', couponRoutes);
-  app.use('/api/settings', settingsRoutes);
-  app.use('/api/messages', messageRoutes);
+  app.use('/api/accounts', accountRoutes);
 } catch (error) {
   console.log('Some routes not available:', error.message);
 }
