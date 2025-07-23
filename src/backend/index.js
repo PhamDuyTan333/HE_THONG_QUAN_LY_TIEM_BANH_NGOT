@@ -98,12 +98,14 @@ try {
   const categoryRoutes = require('./routes/categoryRoutes');
   const orderRoutes = require('./routes/orderRoutes');
   const accountRoutes = require('./routes/accountRoutes');
+  const customerRoutes = require('./routes/customerRoutes');
 
   app.use('/api/auth', authRoutes);
   app.use('/api/products', productRoutes);
   app.use('/api/categories', categoryRoutes);
   app.use('/api/orders', orderRoutes);
   app.use('/api/accounts', accountRoutes);
+  app.use('/api/customers', customerRoutes);
 } catch (error) {
   console.log('Some routes not available:', error.message);
 }
