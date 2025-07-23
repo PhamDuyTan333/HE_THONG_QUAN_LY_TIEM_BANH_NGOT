@@ -1,5 +1,5 @@
-// models/categoryModel.js
-const db = require('../config/db');
+// models/categoryModel.js - PostgreSQL version
+const pool = require('../config/db');
 
 class Category {
   constructor(data) {
@@ -14,65 +14,93 @@ class Category {
     this.status = data.status;
     this.created_at = data.created_at;
     this.updated_at = data.updated_at;
-    this.product_count = data.product_count || 0;
+    this.product_count = data.product_count;
   }
 
-  // Find all categories
-  static async findAll(options = {}) {
-    const { status = 'active', includeProductCount = true } = options;
-    
+  // Get all categories
+  static async getAll(filters = {}) {
     let query = `
-      SELECT 
-        c.*
-        ${includeProductCount ? ', COUNT(p.id) as product_count' : ''}
+      SELECT c.*, 
+             COUNT(p.id) as product_count
       FROM categories c
-      ${includeProductCount ? 'LEFT JOIN products p ON c.id = p.category_id AND p.status = "active"' : ''}
-      WHERE c.status = ?
-      ${includeProductCount ? 'GROUP BY c.id' : ''}
-      ORDER BY c.sort_order ASC, c.name ASC
+      LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
+      WHERE 1=1
     `;
+    
+    const queryParams = [];
+    let paramIndex = 1;
 
-    const [rows] = await db.execute(query, [status]);
-    return rows.map(row => new Category(row));
+    if (filters.status) {
+      query += ` AND c.status = $${paramIndex}`;
+      queryParams.push(filters.status);
+      paramIndex++;
+    }
+
+    if (filters.parent_id !== undefined) {
+      if (filters.parent_id === null) {
+        query += ` AND c.parent_id IS NULL`;
+      } else {
+        query += ` AND c.parent_id = $${paramIndex}`;
+        queryParams.push(filters.parent_id);
+        paramIndex++;
+      }
+    }
+
+    if (filters.search) {
+      query += ` AND (c.name ILIKE $${paramIndex} OR c.description ILIKE $${paramIndex + 1})`;
+      queryParams.push(`%${filters.search}%`, `%${filters.search}%`);
+      paramIndex += 2;
+    }
+
+    query += ` GROUP BY c.id`;
+
+    const sortBy = filters.sortBy || 'sort_order';
+    const sortOrder = filters.sortOrder || 'ASC';
+    query += ` ORDER BY c.${sortBy} ${sortOrder}`;
+
+    if (filters.limit) {
+      query += ` LIMIT $${paramIndex}`;
+      queryParams.push(filters.limit);
+      paramIndex++;
+      
+      if (filters.offset) {
+        query += ` OFFSET $${paramIndex}`;
+        queryParams.push(filters.offset);
+      }
+    }
+
+    const result = await pool.query(query, queryParams);
+    return result.rows.map(row => new Category(row));
   }
 
   // Find category by ID
   static async findById(id) {
     const query = `
-      SELECT 
-        c.*,
-        COUNT(p.id) as product_count
+      SELECT c.*, 
+             COUNT(p.id) as product_count
       FROM categories c
       LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
-      WHERE c.id = ?
+      WHERE c.id = $1
       GROUP BY c.id
     `;
     
-    const [rows] = await db.execute(query, [id]);
-    return rows.length > 0 ? new Category(rows[0]) : null;
+    const result = await pool.query(query, [id]);
+    return result.rows.length > 0 ? new Category(result.rows[0]) : null;
   }
 
   // Find category by slug
   static async findBySlug(slug) {
     const query = `
-      SELECT 
-        c.*,
-        COUNT(p.id) as product_count
+      SELECT c.*, 
+             COUNT(p.id) as product_count
       FROM categories c
       LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
-      WHERE c.slug = ?
+      WHERE c.slug = $1
       GROUP BY c.id
     `;
     
-    const [rows] = await db.execute(query, [slug]);
-    return rows.length > 0 ? new Category(rows[0]) : null;
-  }
-
-  // Find category by name
-  static async findByName(name) {
-    const query = 'SELECT * FROM categories WHERE name = ?';
-    const [rows] = await db.execute(query, [name]);
-    return rows.length > 0 ? new Category(rows[0]) : null;
+    const result = await pool.query(query, [slug]);
+    return result.rows.length > 0 ? new Category(result.rows[0]) : null;
   }
 
   // Create new category
@@ -80,7 +108,9 @@ class Category {
     const query = `
       INSERT INTO categories (
         name, slug, description, image, parent_id, sort_order, is_featured, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8
+      ) RETURNING id
     `;
 
     const values = [
@@ -94,30 +124,33 @@ class Category {
       categoryData.status || 'active'
     ];
 
-    const [result] = await db.execute(query, values);
-    return this.findById(result.insertId);
+    const result = await pool.query(query, values);
+    return this.findById(result.rows[0].id);
   }
 
   // Update category
   static async update(id, categoryData) {
     const updateFields = [];
     const updateValues = [];
+    let paramIndex = 1;
 
     Object.keys(categoryData).forEach(key => {
-      if (categoryData[key] !== undefined) {
-        updateFields.push(`${key} = ?`);
+      if (categoryData[key] !== undefined && key !== 'id') {
+        updateFields.push(`${key} = $${paramIndex}`);
         updateValues.push(categoryData[key]);
+        paramIndex++;
       }
     });
 
     if (updateFields.length === 0) {
-      throw new Error('No data to update');
+      return this.findById(id);
     }
 
+    updateFields.push(`updated_at = NOW()`);
     updateValues.push(id);
 
-    const query = `UPDATE categories SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = ?`;
-    await db.execute(query, updateValues);
+    const query = `UPDATE categories SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`;
+    await pool.query(query, updateValues);
     
     return this.findById(id);
   }
@@ -125,134 +158,94 @@ class Category {
   // Delete category
   static async delete(id) {
     // Check if category has products
-    const [products] = await db.execute('SELECT id FROM products WHERE category_id = ? LIMIT 1', [id]);
-    if (products.length > 0) {
-      throw new Error('Cannot delete category with products');
+    const productCheck = await pool.query('SELECT COUNT(*) as count FROM products WHERE category_id = $1', [id]);
+    if (parseInt(productCheck.rows[0].count) > 0) {
+      throw new Error('Cannot delete category that has products');
     }
 
-    // Check if category has subcategories
-    const [subcategories] = await db.execute('SELECT id FROM categories WHERE parent_id = ? LIMIT 1', [id]);
-    if (subcategories.length > 0) {
-      throw new Error('Cannot delete category with subcategories');
-    }
-
-    const query = 'DELETE FROM categories WHERE id = ?';
-    const [result] = await db.execute(query, [id]);
-    return result.affectedRows > 0;
-  }
-
-  // Get parent categories (top level)
-  static async getParentCategories() {
-    const query = `
-      SELECT 
-        c.*,
-        COUNT(p.id) as product_count
-      FROM categories c
-      LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
-      WHERE c.parent_id IS NULL AND c.status = 'active'
-      GROUP BY c.id
-      ORDER BY c.sort_order ASC, c.name ASC
-    `;
-    
-    const [rows] = await db.execute(query);
-    return rows.map(row => new Category(row));
-  }
-
-  // Get subcategories by parent ID
-  static async getSubcategories(parentId) {
-    const query = `
-      SELECT 
-        c.*,
-        COUNT(p.id) as product_count
-      FROM categories c
-      LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
-      WHERE c.parent_id = ? AND c.status = 'active'
-      GROUP BY c.id
-      ORDER BY c.sort_order ASC, c.name ASC
-    `;
-    
-    const [rows] = await db.execute(query, [parentId]);
-    return rows.map(row => new Category(row));
-  }
-
-  // Get featured categories
-  static async getFeatured(limit = 6) {
-    const query = `
-      SELECT 
-        c.*,
-        COUNT(p.id) as product_count
-      FROM categories c
-      LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
-      WHERE c.is_featured = true AND c.status = 'active'
-      GROUP BY c.id
-      ORDER BY c.sort_order ASC, c.name ASC
-      LIMIT ?
-    `;
-    
-    const [rows] = await db.execute(query, [limit]);
-    return rows.map(row => new Category(row));
-  }
-
-  // Get category tree (hierarchical structure)
-  static async getCategoryTree() {
-    const parentCategories = await this.getParentCategories();
-    
-    for (let parent of parentCategories) {
-      parent.subcategories = await this.getSubcategories(parent.id);
-    }
-    
-    return parentCategories;
+    const query = 'DELETE FROM categories WHERE id = $1';
+    const result = await pool.query(query, [id]);
+    return result.rowCount > 0;
   }
 
   // Get categories count
   static async getCount(filters = {}) {
-    let whereClause = 'WHERE status = ?';
-    const queryParams = [filters.status || 'active'];
+    let query = 'SELECT COUNT(*) as total FROM categories WHERE 1=1';
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (filters.status) {
+      query += ` AND status = $${paramIndex}`;
+      queryParams.push(filters.status);
+      paramIndex++;
+    }
 
     if (filters.parent_id !== undefined) {
       if (filters.parent_id === null) {
-        whereClause += ' AND parent_id IS NULL';
+        query += ` AND parent_id IS NULL`;
       } else {
-        whereClause += ' AND parent_id = ?';
+        query += ` AND parent_id = $${paramIndex}`;
         queryParams.push(filters.parent_id);
+        paramIndex++;
       }
     }
 
-    const query = `SELECT COUNT(*) as total FROM categories ${whereClause}`;
-    const [rows] = await db.execute(query, queryParams);
-    return rows[0].total;
-  }
-
-  // Check if slug exists
-  static async slugExists(slug, excludeId = null) {
-    let query = 'SELECT id FROM categories WHERE slug = ?';
-    const params = [slug];
-
-    if (excludeId) {
-      query += ' AND id != ?';
-      params.push(excludeId);
+    if (filters.search) {
+      query += ` AND (name ILIKE $${paramIndex} OR description ILIKE $${paramIndex + 1})`;
+      queryParams.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
-    const [rows] = await db.execute(query, params);
-    return rows.length > 0;
+    const result = await pool.query(query, queryParams);
+    return parseInt(result.rows[0].total);
   }
 
-  // Generate unique slug
-  static async generateUniqueSlug(name, excludeId = null) {
-    let baseSlug = name.toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
+  // Get featured categories
+  static async getFeatured(limit = 8) {
+    const query = `
+      SELECT c.*, 
+             COUNT(p.id) as product_count
+      FROM categories c
+      LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
+      WHERE c.is_featured = true AND c.status = 'active'
+      GROUP BY c.id
+      ORDER BY c.sort_order ASC
+      LIMIT $1
+    `;
+    
+    const result = await pool.query(query, [limit]);
+    return result.rows.map(row => new Category(row));
+  }
 
-    let slug = baseSlug;
-    let counter = 1;
+  // Get parent categories
+  static async getParents() {
+    const query = `
+      SELECT c.*, 
+             COUNT(p.id) as product_count
+      FROM categories c
+      LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
+      WHERE c.parent_id IS NULL AND c.status = 'active'
+      GROUP BY c.id
+      ORDER BY c.sort_order ASC
+    `;
+    
+    const result = await pool.query(query);
+    return result.rows.map(row => new Category(row));
+  }
 
-    while (await this.slugExists(slug, excludeId)) {
-      slug = `${baseSlug}-${counter}`;
-      counter++;
-    }
-
-    return slug;
+  // Get children categories
+  static async getChildren(parentId) {
+    const query = `
+      SELECT c.*, 
+             COUNT(p.id) as product_count
+      FROM categories c
+      LEFT JOIN products p ON c.id = p.category_id AND p.status = 'active'
+      WHERE c.parent_id = $1 AND c.status = 'active'
+      GROUP BY c.id
+      ORDER BY c.sort_order ASC
+    `;
+    
+    const result = await pool.query(query, [parentId]);
+    return result.rows.map(row => new Category(row));
   }
 }
 

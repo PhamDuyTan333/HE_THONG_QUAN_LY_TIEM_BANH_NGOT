@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import categoryAPI from '../services/categoryApi';
+import productAPI from '../services/productApi';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import ImageUpload from '../components/common/ImageUpload';
@@ -32,7 +34,20 @@ const CategoryManagement = () => {
     filterCategories();
   }, [searchTerm, categories]);
 
-  const loadCategories = () => {
+  const loadCategories = async () => {
+    try {
+      const response = await categoryAPI.getAll();
+      if (response.success) {
+        setCategories(response.data);
+        updateStats(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      setCategories([]);
+    }
+  };
+
+  const loadCategoriesOld = () => {
     // Load from localStorage or create initial data
     const savedCategories = JSON.parse(localStorage.getItem('bakeryCategories') || '[]');
     const savedProducts = JSON.parse(localStorage.getItem('bakeryProducts') || '[]');

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import productAPI from '../services/productApi';
+import categoryAPI from '../services/categoryApi';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 
@@ -37,7 +39,21 @@ const AdminProductManagement = () => {
     filterProducts();
   }, [searchTerm, categoryFilter, statusFilter, products]);
 
-  const loadProducts = () => {
+  const loadProducts = async () => {
+    try {
+      const response = await productAPI.getAll({ limit: 100 });
+      if (response.success) {
+        setProducts(response.data);
+        updateStats(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading products:', error);
+      // Fallback to empty array
+      setProducts([]);
+    }
+  };
+
+  const loadProductsOld = () => {
     // Load from localStorage or create initial data
     const savedProducts = JSON.parse(localStorage.getItem('bakeryProducts') || '[]');
     

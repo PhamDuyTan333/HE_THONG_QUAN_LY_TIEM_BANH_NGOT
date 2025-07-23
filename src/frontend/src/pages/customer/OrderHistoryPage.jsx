@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CustomerHeader from '../../components/customer/Header';
 import { useCart } from '../../context/CartContext';
+import orderAPI from '../../services/orderApi';
 
 const OrderHistoryPage = () => {
   const navigate = useNavigate();
@@ -28,8 +29,22 @@ const OrderHistoryPage = () => {
     }
   }, [navigate]);
 
-  const loadOrders = (customerEmail) => {
-    // Lấy đơn hàng từ localStorage
+  const loadOrders = async (customerEmail) => {
+    try {
+      // Lấy customer ID từ localStorage
+      const customerData = JSON.parse(localStorage.getItem('customer'));
+      if (customerData && customerData.id) {
+        const response = await orderAPI.getCustomerOrders(customerData.id);
+        if (response.success) {
+          setOrders(response.data);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading orders from API:', error);
+    }
+
+    // Fallback to localStorage
     const allOrders = JSON.parse(localStorage.getItem('customerOrders') || '[]');
     const customerOrders = allOrders.filter(order => order.customerEmail === customerEmail);
     

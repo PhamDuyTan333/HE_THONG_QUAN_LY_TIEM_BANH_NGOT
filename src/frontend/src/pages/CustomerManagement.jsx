@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
+import customerAPI from '../services/customerApi';
 
 const CustomerManagement = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -77,8 +78,19 @@ const CustomerManagement = () => {
     filterCustomers();
   }, [searchTerm, customers]);
 
-  const loadCustomers = () => {
-    // Load from localStorage
+  const loadCustomers = async () => {
+    try {
+      const response = await customerAPI.getAll();
+      if (response.success) {
+        setCustomers(response.data);
+        updateStats(response.data);
+        return;
+      }
+    } catch (error) {
+      console.error('Error loading customers from API:', error);
+    }
+
+    // Fallback to localStorage
     const accounts = JSON.parse(localStorage.getItem('customerAccounts') || '{}');
     const orders = JSON.parse(localStorage.getItem('customerOrders') || '[]');
 

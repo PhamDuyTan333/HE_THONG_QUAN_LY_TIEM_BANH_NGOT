@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
+import orderAPI from '../services/orderApi';
 
 const AdminOrderManagement = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -31,8 +32,19 @@ const AdminOrderManagement = () => {
     filterOrders();
   }, [searchTerm, statusFilter, orders]);
 
-  const loadOrders = () => {
-    // Load orders from localStorage
+  const loadOrders = async () => {
+    try {
+      const response = await orderAPI.getAll();
+      if (response.success) {
+        setOrders(response.data);
+        updateStats(response.data);
+        return;
+      }
+    } catch (error) {
+      console.error('Error loading orders from API:', error);
+    }
+
+    // Fallback to localStorage
     const customerOrders = JSON.parse(localStorage.getItem('customerOrders') || '[]');
 
     // Add some demo orders if empty

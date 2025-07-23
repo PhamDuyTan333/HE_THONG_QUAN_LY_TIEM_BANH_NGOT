@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import customerAPI from '../../services/customerApi';
 import CustomerHeader from '../../components/customer/Header';
 
 const CustomerLoginPage = () => {
@@ -93,46 +94,21 @@ const CustomerLoginPage = () => {
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
       if (isLogin) {
-        // Lấy danh sách tài khoản từ localStorage
-        const savedAccounts = JSON.parse(localStorage.getItem('customerAccounts') || '{}');
+        // Đăng nhập bằng API
+        const response = await customerAPI.login({
+          email: formData.email,
+          password: formData.password
+        });
 
-        // Tài khoản demo mặc định với ngày tham gia
-        const now = new Date();
-        const defaultCustomers = {
-          'customer1@email.com': {
-            password: '123456',
-            name: 'Nguyễn Văn A',
-            phone: '0901234567',
-            joinDate: new Date(now.getFullYear(), now.getMonth() - 2, 15).toISOString()
-          },
-          'customer2@email.com': {
-            password: '123456',
-            name: 'Trần Thị B',
-            phone: '0912345678',
-            joinDate: new Date(now.getFullYear(), now.getMonth() - 1, 8).toISOString()
-          },
-          'customer3@email.com': {
-            password: '123456',
-            name: 'Lê Văn C',
-            phone: '0923456789',
-            joinDate: new Date(now.getFullYear(), now.getMonth(), 3).toISOString()
-          }
-        };
-
-        // Kết hợp tài khoản demo và tài khoản đã đăng ký
-        const allCustomers = { ...defaultCustomers, ...savedAccounts };
-
-        const customer = allCustomers[formData.email];
-        if (customer && customer.password === formData.password) {
+        if (response.success) {
+          // Lưu thông tin khách hàng vào localStorage
           const customerData = {
-            id: Date.now(),
-            email: formData.email,
-            fullName: customer.name,
-            phone: customer.phone
+            id: response.data.id,
+            email: response.data.email,
+            fullName: response.data.full_name,
+            phone: response.data.phone,
+            status: response.data.status
           };
           localStorage.setItem('customer', JSON.stringify(customerData));
           alert('Đăng nhập thành công!');
@@ -141,68 +117,41 @@ const CustomerLoginPage = () => {
           const from = location.state?.from?.pathname || '/';
           navigate(from, { replace: true });
         } else {
-          alert('Email hoặc mật khẩu không đúng!');
+          alert(response.message || 'Đăng nhập thất bại!');
           return;
         }
       } else {
-        // Đăng ký tài khoản mới
-        const savedAccounts = JSON.parse(localStorage.getItem('customerAccounts') || '{}');
+        // Đăng ký tài khoản mới bằng API
+        const response = await customerAPI.register({
+          email: formData.email,
+          password: formData.password,
+          full_name: formData.fullName,
+          phone: formData.phone
+        });
 
-        // Kiểm tra email đã tồn tại chưa
-        const now = new Date();
-        const defaultCustomers = {
-          'customer1@email.com': {
-            password: '123456',
-            name: 'Nguyễn Văn A',
-            phone: '0901234567',
-            joinDate: new Date(now.getFullYear(), now.getMonth() - 2, 15).toISOString()
-          },
-          'customer2@email.com': {
-            password: '123456',
-            name: 'Trần Thị B',
-            phone: '0912345678',
-            joinDate: new Date(now.getFullYear(), now.getMonth() - 1, 8).toISOString()
-          },
-          'customer3@email.com': {
-            password: '123456',
-            name: 'Lê Văn C',
-            phone: '0923456789',
-            joinDate: new Date(now.getFullYear(), now.getMonth(), 3).toISOString()
-          }
-        };
-        const allCustomers = { ...defaultCustomers, ...savedAccounts };
+        if (response.success) {
+          // Tự động đăng nhập sau khi đăng ký thành công
+          const customerData = {
+            id: response.data.id,
+            email: response.data.email,
+            fullName: response.data.full_name,
+            phone: response.data.phone,
+            status: response.data.status
+          };
+          localStorage.setItem('customer', JSON.stringify(customerData));
+          alert('Đăng ký thành công!');
 
-        if (allCustomers[formData.email]) {
-          alert('Email này đã được đăng ký! Vui lòng sử dụng email khác.');
+          // Chuyển hướng về trang trước đó hoặc trang chủ
+          const from = location.state?.from?.pathname || '/';
+          navigate(from, { replace: true });
+        } else {
+          alert(response.message || 'Đăng ký thất bại!');
           return;
         }
-
-        // Lưu tài khoản mới
-        savedAccounts[formData.email] = {
-          password: formData.password,
-          name: formData.fullName,
-          phone: formData.phone,
-          joinDate: new Date().toISOString() // Lưu ngày tham gia thực tế
-        };
-
-        localStorage.setItem('customerAccounts', JSON.stringify(savedAccounts));
-
-        // Tự động đăng nhập sau khi đăng ký thành công
-        const customerData = {
-          id: Date.now(),
-          email: formData.email,
-          fullName: formData.fullName,
-          phone: formData.phone
-        };
-        localStorage.setItem('customer', JSON.stringify(customerData));
-        alert('Đăng ký thành công!');
-
-        // Chuyển hướng về trang trước đó hoặc trang chủ
-        const from = location.state?.from?.pathname || '/';
-        navigate(from, { replace: true });
       }
     } catch (error) {
-      alert('Có lỗi xảy ra. Vui lòng thử lại!');
+      console.error('API Error:', error);
+      alert(error.message || 'Có lỗi xảy ra. Vui lòng thử lại!');
     } finally {
       setIsLoading(false);
     }

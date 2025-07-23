@@ -7,7 +7,7 @@ const isProduction = import.meta.env.PROD;
 // API Base URLs
 const API_URLS = {
   development: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
-  production: import.meta.env.VITE_API_URL_PRODUCTION || 'https://your-backend-domain.vercel.app/api'
+  production: import.meta.env.VITE_API_URL || 'https://backend-495gic6dd-hhhs-projects-a2fce4e4.vercel.app/api'
 };
 
 // Get current API URL based on environment

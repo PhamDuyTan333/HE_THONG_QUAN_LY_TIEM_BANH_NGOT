@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import productAPI from '../../services/productApi';
+import categoryAPI from '../../services/categoryApi';
 import CustomerHeader from '../../components/customer/Header';
 import ResponsiveImage from '../../components/common/ResponsiveImage';
 import ResponsiveContainer from '../../components/common/ResponsiveContainer';
@@ -80,7 +82,19 @@ const HomePage = () => {
     }
   };
 
-  const loadFeaturedProducts = () => {
+  const loadFeaturedProducts = async () => {
+    try {
+      const response = await productAPI.getFeatured(8);
+      if (response.success) {
+        setFeaturedProducts(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading featured products:', error);
+      setFeaturedProducts([]);
+    }
+  };
+
+  const loadFeaturedProductsOld = () => {
     // Load products from admin management
     const savedProducts = JSON.parse(localStorage.getItem('bakeryProducts') || '[]');
 
@@ -105,7 +119,19 @@ const HomePage = () => {
     });
   };
 
-  const loadCategories = () => {
+  const loadCategories = async () => {
+    try {
+      const response = await categoryAPI.getFeatured(6);
+      if (response.success) {
+        setCategories(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      setCategories([]);
+    }
+  };
+
+  const loadCategoriesOld = () => {
     // Load categories from admin management
     const savedCategories = JSON.parse(localStorage.getItem('bakeryCategories') || '[]');
     const savedProducts = JSON.parse(localStorage.getItem('bakeryProducts') || '[]');

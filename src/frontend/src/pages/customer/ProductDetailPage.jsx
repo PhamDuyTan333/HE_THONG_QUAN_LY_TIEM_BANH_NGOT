@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import CustomerHeader from '../../components/customer/Header';
 import { useCart } from '../../context/CartContext';
+import productAPI from '../../services/productApi';
 
 const ProductDetailPage = () => {
   const { id } = useParams();
@@ -17,7 +18,21 @@ const ProductDetailPage = () => {
     loadRelatedProducts();
   }, [id]);
 
-  const loadProduct = () => {
+  const loadProduct = async () => {
+    try {
+      const response = await productAPI.getById(id);
+      if (response.success) {
+        setProduct(response.data);
+      } else {
+        setProduct(null);
+      }
+    } catch (error) {
+      console.error('Error loading product:', error);
+      setProduct(null);
+    }
+  };
+
+  const loadProductOld = () => {
     // Load real product from localStorage
     const savedProducts = JSON.parse(localStorage.getItem('bakeryProducts') || '[]');
     const foundProduct = savedProducts.find(p => p.id.toString() === id);

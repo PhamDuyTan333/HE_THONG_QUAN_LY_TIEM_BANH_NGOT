@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CustomerHeader from '../../components/customer/Header';
 import { useCart } from '../../context/CartContext';
+import orderAPI from '../../services/orderApi';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -178,16 +179,51 @@ const CheckoutPage = () => {
           deliveryMethod: orderData.deliveryMethod
         };
 
-        // Lưu đơn hàng vào localStorage
-        const existingOrders = JSON.parse(localStorage.getItem('customerOrders') || '[]');
-        existingOrders.push(newOrder);
-        localStorage.setItem('customerOrders', JSON.stringify(existingOrders));
+        // Lưu đơn hàng vào database thông qua API
+        try {
+          const orderResponse = await orderAPI.create({
+            customer_id: JSON.parse(localStorage.getItem('customer')).id,
+            customer_name: newOrder.customerInfo.fullName,
+            customer_email: newOrder.customerInfo.email,
+            customer_phone: newOrder.customerInfo.phone,
+            delivery_address: `${newOrder.shippingAddress.address}, ${newOrder.shippingAddress.ward}, ${newOrder.shippingAddress.city}`,
+            order_date: new Date().toISOString(),
+            subtotal: newOrder.subtotal,
+            delivery_fee: newOrder.shippingFee,
+            total_amount: newOrder.total,
+            payment_method: newOrder.paymentMethod,
+            payment_status: 'pending',
+            order_status: 'pending',
+            notes: newOrder.shippingAddress.note,
+            items: newOrder.items.map(item => ({
+              product_id: item.id,
+              product_name: item.name,
+              quantity: item.quantity,
+              unit_price: item.price,
+              total_price: item.price * item.quantity
+            }))
+          });
 
-        // Xóa giỏ hàng
-        clearCart();
+          if (orderResponse.success) {
+            // Xóa giỏ hàng
+            clearCart();
+            alert('Đặt hàng thành công! Chúng tôi sẽ liên hệ với bạn sớm nhất.');
+            navigate('/orders');
+          } else {
+            throw new Error(orderResponse.message || 'Không thể tạo đơn hàng');
+          }
+        } catch (apiError) {
+          console.error('API Error:', apiError);
+          // Fallback to localStorage if API fails
+          const existingOrders = JSON.parse(localStorage.getItem('customerOrders') || '[]');
+          existingOrders.push(newOrder);
+          localStorage.setItem('customerOrders', JSON.stringify(existingOrders));
 
-        alert('Đặt hàng thành công! Chúng tôi sẽ liên hệ với bạn sớm nhất.');
-        navigate('/orders');
+          // Xóa giỏ hàng
+          clearCart();
+          alert('Đặt hàng thành công! Chúng tôi sẽ liên hệ với bạn sớm nhất.');
+          navigate('/orders');
+        }
       } catch (error) {
         console.error('Error submitting order:', error);
         alert('Có lỗi xảy ra khi đặt hàng. Vui lòng thử lại!');
